@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NPC File Explorer — 完整版</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#1E90FF; --glass: rgba(255,255,255,0.04);
+      --text:#e6eef8; --danger:#f43f5e; --white:#fff; --radius:14px;
+    }
+    [data-theme="light"]{
+      --bg:#f6f9fc; --card:#ffffff; --muted:#546069; --accent:#0366d6; --glass: rgba(0,0,0,0.04);
+      --text:#0b1220; --danger:#b91c1c; --white:#fff;
+    }
+    body{margin:0;font-family:sans-serif;background:var(--bg);color:var(--text)}
+    header, footer{text-align:center;padding:10px;color:var(--muted)}
+    .container{max-width:1080px;margin:20px auto;padding:20px}
+    .file{padding:12px;margin:8px;background:var(--card);border-radius:var(--radius);cursor:pointer}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal{background:var(--card);padding:20px;border-radius:var(--radius);max-width:90%;max-height:90%;overflow:auto;color:var(--text)}
+    .btn{padding:8px 12px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;margin:5px 0}
+    .file-info{font-size:0.9em;color:var(--muted);margin-top:4px}
+    .admin-panel{margin-top:20px;padding:10px;background:var(--glass);border-radius:var(--radius)}
+  </style>
+</head>
+<body data-theme="dark">
+  <header>
+    <h1>NPC File Explorer</h1>
+    <button id="themeToggle" class="btn">切换主题</button>
+  </header>
+  <div class="container">
+    <input type="file" id="fileInput" multiple />
+    <div id="filesContainer"></div>
+    <div class="admin-panel">
+      <h3>管理员登录</h3>
+      <input type="text" id="adminUser" placeholder="用户名" />
+      <input type="password" id="adminPass" placeholder="密码" />
+      <button id="adminLogin" class="btn">登录</button>
+      <p id="loginWarning" style="color:var(--danger)">⚠ 不修改默认凭证可能会被盗取</p>
+      <div id="adminContent" style="display:none">
+        <p>当前用户名: <span id="currentUser"></span></p>
+        <p>当前密码: <span id="currentPass"></span></p>
+        <input type="text" id="newUser" placeholder="新用户名" />
+        <input type="password" id="newPass" placeholder="新密码" />
+        <button id="updateCreds" class="btn">更新凭证</button>
+      </div>
+    </div>
+  </div>
+  <div id="modal" class="modal-backdrop">
+    <div class="modal">
+      <button id="closeModal" class="btn">关闭</button>
+      <div id="fileDetails"></div>
+      <pre id="fileContent"></pre>
+    </div>
+  </div>
+  <footer>
+    © 2025 StavlyNg 归版权所有
+  </footer>
+  <script>
+    const filesContainer = document.getElementById('filesContainer');
+    const fileInput = document.getElementById('fileInput');
+    const modal = document.getElementById('modal');
+    const fileContent = document.getElementById('fileContent');
+    const fileDetails = document.getElementById('fileDetails');
+    const closeModal = document.getElementById('closeModal');
+    const themeToggle = document.getElementById('themeToggle');
+
+    let files = [];
+
+    function renderFiles(){
+      filesContainer.innerHTML = '';
+      files.forEach((f,i)=>{
+        const div = document.createElement('div');
+        div.className = 'file';
+        div.innerHTML = `<strong>${f.name}</strong><div class="file-info">${(f.size/1024).toFixed(2)} KB | ${f.type || '未知类型'}</div>`;
+        div.addEventListener('click', ()=>showFile(i));
+        filesContainer.appendChild(div);
+      });
+    }
+
+    function showFile(index){
+      const file = files[index];
+      fileDetails.innerHTML = `<p><strong>文件名:</strong> ${file.name}</p>
+        <p><strong>大小:</strong> ${(file.size/1024).toFixed(2)} KB</p>
+        <p><strong>类型:</strong> ${file.type || '未知类型'}</p>
+        <p><strong>最后修改:</strong> ${new Date(file.lastModified).toLocaleString()}</p>`;
+      const reader = new FileReader();
+      reader.onload = e => {
+        fileContent.textContent = e.target.result;
+        modal.style.display = 'flex';
+      };
+      if(file.type.startsWith('text') || file.type===''){ reader.readAsText(file); }
+      else{ fileContent.textContent = '无法预览此文件类型'; modal.style.display = 'flex'; }
+    }
+
+    fileInput.addEventListener('change', e => {
+      files = Array.from(e.target.files);
+      renderFiles();
+    });
+
+    closeModal.addEventListener('click', ()=>{ modal.style.display = 'none'; });
+    modal.addEventListener('click', e=>{ if(e.target===modal) modal.style.display='none'; });
+
+    // Theme toggle
+    themeToggle.addEventListener('click', ()=>{
+      const currentTheme = document.body.getAttribute('data-theme');
+      document.body.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+    });
+
+    // Admin login logic
+    const adminUser = document.getElementById('adminUser');
+    const adminPass = document.getElementById('adminPass');
+    const adminLogin = document.getElementById('adminLogin');
+    const adminContent = document.getElementById('adminContent');
+    const currentUser = document.getElementById('currentUser');
+    const currentPass = document.getElementById('currentPass');
+    const newUser = document.getElementById('newUser');
+    const newPass = document.getElementById('newPass');
+    const updateCreds = document.getElementById('updateCreds');
+
+    let storedUser = localStorage.getItem('adminUser') || 'admin';
+    let storedPass = localStorage.getItem('adminPass') || '123456';
+
+    adminLogin.addEventListener('click', ()=>{
+      if(adminUser.value === storedUser && adminPass.value === storedPass){
+        currentUser.textContent = storedUser;
+        currentPass.textContent = storedPass.replace(/./g, '*');
+        adminContent.style.display = 'block';
+      } else {
+        alert('用户名或密码错误');
+      }
+    });
+
+    updateCreds.addEventListener('click', ()=>{
+      if(newUser.value && newPass.value){
+        storedUser = newUser.value;
+        storedPass = newPass.value;
+        localStorage.setItem('adminUser', storedUser);
+        localStorage.setItem('adminPass', storedPass);
+        currentUser.textContent = storedUser;
+        currentPass.textContent = storedPass.replace(/./g, '*');
+        alert('凭证已更新');
+      }
+    });
+  </script>
+</body>
+</html>
